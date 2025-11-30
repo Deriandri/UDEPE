@@ -599,4 +599,596 @@ function _draw_service_status() {
     text_len_visible=$(echo -e "$status_output" | sed 's/\x1b\[[0-9;]*m//g' | wc -c)
     text_len_visible=$((text_len_visible - 1))
 
-    loc
+    local padding_total=$((menu_width - text_len_visible))
+    local padding_left=$((padding_total / 2))
+    local padding_right=$((padding_total - padding_left))
+    
+    echo -e "${YELLOW}╠════════════════════════════════════════════════════╣${NC}"
+    echo -e "$(printf '%*s' $padding_left)${status_output}$(printf '%*s' $padding_right)"
+    echo -e "${YELLOW}╠════════════════════════════════════════════════════╣${NC}"
+}
+
+function setup_auto_backup() {
+    echo "--- Configure Auto Backup ---"
+    if [ ! -f "/etc/zivpn/telegram.conf" ]; then
+        echo "Telegram is not configured. Please run a manual backup once to set it up."
+        return
+    fi
+
+    read -p "Enter backup interval in hours (e.g., 6, 12, 24). Enter 0 to disable: " interval
+    if ! [[ "$interval" =~ ^[0-9]+$ ]]; then
+        echo "Invalid input. Please enter a number."
+        return
+    fi
+
+    (crontab -l 2>/dev/null | grep -v "# zivpn-auto-backup") | crontab -
+
+    if [ "$interval" -gt 0 ]; then
+        local cron_schedule="0 */${interval} * * *"
+        (crontab -l 2>/dev/null; echo "${cron_schedule} /usr/local/bin/zivpn_helper.sh backup >/dev/null 2>&1 # zivpn-auto-backup") | crontab -
+        echo "Auto backup scheduled to run every ${interval} hour(s)."
+    else
+        echo "Auto backup has been disabled."
+    fi
+}
+
+function create_account() {
+    clear
+    echo -e "${YELLOW}╔════════════════// ${RED}Create Account${YELLOW} //════════════════╗${NC}"
+    echo -e "${YELLOW}║                                                    ║${NC}"
+    echo -e "${YELLOW}║   ${RED}1)${NC} ${BOLD_WHITE}Create Zivpn                                  ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║   ${RED}2)${NC} ${BOLD_WHITE}Trial Zivpn                                   ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║   ${RED}0)${NC} ${BOLD_WHITE}Back to Main Menu                             ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║                                                    ║${NC}"
+    echo -e "${YELLOW}╚════════════════════════════════════════════════════╝${NC}"
+    
+    read -p "Enter your choice [0-2]: " choice
+
+    case $choice in
+        1) create_manual_account ;;
+        2) create_trial_account ;;
+        0) return ;;
+        *) echo "Invalid option." ;;
+    esac
+}
+
+function show_backup_menu() {
+    clear
+    echo -e "${YELLOW}╔═══════════════// ${RED}Backup/Restore${YELLOW} //═══════════════╗${NC}"
+    echo -e "${YELLOW}║                                                  ║${NC}"
+    echo -e "${YELLOW}║   ${RED}1)${NC} ${BOLD_WHITE}Backup Data                                 ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║   ${RED}2)${NC} ${BOLD_WHITE}Restore Data                                ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║   ${RED}3)${NC} ${BOLD_WHITE}Auto Backup                                 ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║   ${RED}4)${NC} ${BOLD_WHITE}Atur Ulang Notifikasi Telegram              ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║   ${RED}0)${NC} ${BOLD_WHITE}Back to Main Menu                           ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║                                                  ║${NC}"
+    echo -e "${YELLOW}╚══════════════════════════════════════════════════╝${NC}"
+    
+    read -p "Enter your choice [0-4]: " choice
+    
+    case $choice in
+        1) /usr/local/bin/zivpn_helper.sh backup ;;
+        2) /usr/local/bin/zivpn_helper.sh restore ;;
+        3) setup_auto_backup ;;
+        4) /usr/local/bin/zivpn_helper.sh setup-telegram ;;
+        0) return ;;
+        *) echo "Invalid option." ;;
+    esac
+}
+
+function show_expired_message_and_exit() {
+    clear
+    echo -e "\n${RED}=====================================================${NC}"
+    echo -e "${RED}           LISENSI ANDA TELAH KEDALUWARSA!           ${NC}"
+    echo -e "${RED}=====================================================${NC}\n"
+    echo -e "${BOLD_WHITE}Akses ke layanan ZIVPN di server anda telah dihentikan."
+    echo -e "Segala aktivitas VPN tidak akan berfungsi lagi.\n"
+    echo -e "Untuk memperpanjang lisensi dan mengaktifkan kembali layanan,"
+    echo -e "silakan hubungi admin https://wa.me/6287777694482 \n"
+    echo -e "${LIGHT_GREEN}Setelah diperpanjang, layanan akan aktif kembali secara otomatis.${NC}\n"
+    exit 0
+}
+
+function show_menu() {
+    if [ -f "/etc/zivpn/.expired" ]; then
+        show_expired_message_and_exit
+    fi
+
+    clear
+    figlet "UDP ZIVPN" | lolcat
+    
+    echo -e "${YELLOW}╔══════════════════// ${CYAN}KEDAI SSH${YELLOW} //═══════════════════╗${NC}"
+    _draw_info_panel
+    _draw_service_status
+    echo -e "${YELLOW}║                                                    ║${NC}"
+    echo -e "${YELLOW}║   ${RED}1)${NC} ${BOLD_WHITE}Create Account                                ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║   ${RED}2)${NC} ${BOLD_WHITE}Renew Account                                 ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║   ${RED}3)${NC} ${BOLD_WHITE}Delete Account                                ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║   ${RED}4)${NC} ${BOLD_WHITE}Change Domain                                 ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║   ${RED}5)${NC} ${BOLD_WHITE}List Accounts                                 ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║   ${RED}6)${NC} ${BOLD_WHITE}Backup/Restore                                ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║   ${RED}7)${NC} ${BOLD_WHITE}Generate API Auth Key                         ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║   ${RED}0)${NC} ${BOLD_WHITE}Exit                                          ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║                                                    ║${NC}"
+    echo -e "${YELLOW}╚════════════════════════════════════════════════════╝${NC}"
+    
+    read -p "Enter your choice [0-7]: " choice
+
+    case $choice in
+        1) create_account ;;
+        2) renew_account ;;
+        3) delete_account ;;
+        4) change_domain ;;
+        5) list_accounts ;;
+        6) show_backup_menu ;;
+        7) _generate_api_key ;;
+        0) exit 0 ;;
+        *) echo "Invalid option. Please try again." ;;
+    esac
+}
+
+# --- Main Installation and Setup Logic ---
+function run_setup() {
+    verify_license # <-- VERIFY LICENSE HERE
+# ==============================
+# Quick Install ZiVPN Ubuntu 20.04
+# ==============================
+
+echo "1. Update OS dan install dependensi..."
+apt update && apt upgrade -y
+apt install wget curl ca-certificates -y
+update-ca-certificates
+
+echo "2. Hentikan service lama (jika ada)..."
+systemctl stop zivpn 2>/dev/null
+
+echo "3. Hapus binary lama (jika ada)..."
+rm -f /usr/local/bin/zivpn
+
+echo "4. Download skrip resmi ZiVPN..."
+wget -O /root/zi.sh https://raw.githubusercontent.com/zahidbd2/udp-zivpn/main/zi.sh
+
+echo "5. Beri izin executable..."
+chmod +x /root/zi.sh
+
+echo "6. Jalankan skrip instalasi ZiVPN..."
+sudo /root/zi.sh
+
+echo "7. Reload systemd dan start service..."
+systemctl daemon-reload
+systemctl start zivpn
+systemctl enable zivpn
+
+echo "8. Cek status service..."
+systemctl status zivpn --no-pager
+
+echo "✅ Instalasi selesai. Service ZiVPN harusnya aktif dan panel bisa mendeteksi."
+
+    # --- Setting up Advanced Management ---
+    echo "--- Setting up Advanced Management ---"
+
+    if ! command -v jq &> /dev/null || ! command -v curl &> /dev/null || ! command -v zip &> /dev/null || ! command -v figlet &> /dev/null || ! command -v lolcat &> /dev/null || ! command -v vnstat &> /dev/null; then
+        echo "Installing dependencies (jq, curl, zip, figlet, lolcat, vnstat)..."
+        apt-get update && apt-get install -y jq curl zip figlet lolcat vnstat
+    fi
+
+    # --- vnstat setup ---
+    echo "Configuring vnstat for bandwidth monitoring..."
+    local net_interface
+    net_interface=$(ip -o -4 route show to default | awk '{print $5}' | head -n 1)
+    if [ -n "$net_interface" ]; then
+        echo "Detected network interface: $net_interface"
+        # Wait for the service to be available after installation
+        sleep 2
+        systemctl stop vnstat
+        vnstat -u -i "$net_interface" --force
+        systemctl enable vnstat
+        systemctl start vnstat
+        echo "vnstat setup complete for interface $net_interface."
+    else
+        echo "Warning: Could not automatically detect network interface for vnstat."
+    fi
+    
+    # Download helper script from repository
+    echo "Downloading helper script..."
+    wget -O /usr/local/bin/zivpn_helper.sh https://raw.githubusercontent.com/Deriandri/UDEPE/refs/heads/main/zivpn_helper.sh
+    if [ $? -ne 0 ]; then
+        echo "Failed to download helper script. Aborting."
+        exit 1
+    fi
+    chmod +x /usr/local/bin/zivpn_helper.sh
+
+    echo "Clearing initial password(s) set during base installation..."
+    jq '.auth.config = []' /etc/zivpn/config.json > /etc/zivpn/config.json.tmp && mv /etc/zivpn/config.json.tmp /etc/zivpn/config.json
+
+    touch /etc/zivpn/users.db
+
+    RANDOM_PASS="zivpn$(shuf -i 10000-99999 -n 1)"
+    EXPIRY_DATE=$(date -d "+1 day" +%s)
+
+    echo "Creating a temporary initial account..."
+    echo "${RANDOM_PASS}:${EXPIRY_DATE}" >> /etc/zivpn/users.db
+    jq --arg pass "$RANDOM_PASS" '.auth.config += [$pass]' /etc/zivpn/config.json > /etc/zivpn/config.json.tmp && mv /etc/zivpn/config.json.tmp /etc/zivpn/config.json
+
+    echo "Setting up expiry check cron job..."
+    cat <<'EOF' > /etc/zivpn/expire_check.sh
+#!/bin/bash
+DB_FILE="/etc/zivpn/users.db"
+CONFIG_FILE="/etc/zivpn/config.json"
+TMP_DB_FILE="${DB_FILE}.tmp"
+CURRENT_DATE=$(date +%s)
+SERVICE_RESTART_NEEDED=false
+
+if [ ! -f "$DB_FILE" ]; then exit 0; fi
+> "$TMP_DB_FILE"
+
+while IFS=':' read -r password expiry_date; do
+    if [[ -z "$password" ]]; then continue; fi
+
+    if [ "$expiry_date" -le "$CURRENT_DATE" ]; then
+        echo "User '${password}' has expired. Deleting permanently."
+        jq --arg pass "$password" 'del(.auth.config[] | select(. == $pass))' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+        SERVICE_RESTART_NEEDED=true
+    else
+        echo "${password}:${expiry_date}" >> "$TMP_DB_FILE"
+    fi
+done < "$DB_FILE"
+
+mv "$TMP_DB_FILE" "$DB_FILE"
+
+if [ "$SERVICE_RESTART_NEEDED" = true ]; then
+    echo "Restarting zivpn service due to user removal."
+    systemctl restart zivpn.service
+fi
+exit 0
+EOF
+    chmod +x /etc/zivpn/expire_check.sh
+    CRON_JOB_EXPIRY="* * * * * /etc/zivpn/expire_check.sh # zivpn-expiry-check"
+    (crontab -l 2>/dev/null | grep -v "# zivpn-expiry-check") | crontab -
+    (crontab -l 2>/dev/null; echo "$CRON_JOB_EXPIRY") | crontab -
+
+    echo "Setting up license check script and cron job..."
+    cat <<'EOF' > /etc/zivpn/license_checker.sh
+#!/bin/bash
+# Zivpn License Checker
+# This script is run by a cron job to periodically check the license status.
+
+# --- Configuration ---
+LICENSE_URL="https://raw.githubusercontent.com/Deriandri/UDEPE/refs/heads/main/Jokowipp"
+LICENSE_INFO_FILE="/etc/zivpn/.license_info"
+EXPIRED_LOCK_FILE="/etc/zivpn/.expired"
+TELEGRAM_CONF="/etc/zivpn/telegram.conf"
+LOG_FILE="/var/log/zivpn_license.log"
+
+# --- Logging ---
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
+}
+
+# --- Helper Functions ---
+function get_host() {
+    local CERT_CN
+    CERT_CN=$(openssl x509 -in /etc/zivpn/zivpn.crt -noout -subject | sed -n 's/.*CN = \([^,]*\).*/\1/p' 2>/dev/null || echo "")
+    if [ "$CERT_CN" == "zivpn" ] || [ -z "$CERT_CN" ]; then
+        curl -4 -s ifconfig.me
+    else
+        echo "$CERT_CN"
+    fi
+}
+
+function get_isp() {
+    curl -s ipinfo.io | jq -r '.org // "N/A"'
+}
+
+
+# --- Telegram Notification Function ---
+send_telegram_message() {
+    local message="$1"
+    
+    if [ ! -f "$TELEGRAM_CONF" ]; then
+        log "Telegram config not found, skipping notification."
+        return
+    fi
+    
+    source "$TELEGRAM_CONF"
+    if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+        local api_url="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
+        curl -s -X POST "$api_url" -d "chat_id=${TELEGRAM_CHAT_ID}" --data-urlencode "text=${message}" -d "parse_mode=Markdown" > /dev/null
+        log "Simple telegram notification sent."
+    else
+        log "Telegram config found but token or chat ID is missing."
+    fi
+}
+
+# --- Main Logic ---
+log "Starting license check..."
+
+# 1. Get Server IP
+SERVER_IP=$(curl -4 -s ifconfig.me)
+if [ -z "$SERVER_IP" ]; then
+    log "Error: Failed to retrieve server IP. Exiting."
+    exit 1
+fi
+
+# 2. Get Local License Info
+if [ ! -f "$LICENSE_INFO_FILE" ]; then
+    log "Error: Local license info file not found. Exiting."
+    exit 1
+fi
+source "$LICENSE_INFO_FILE" # This loads CLIENT_NAME and EXPIRY_DATE
+
+# 3. Fetch Remote License Data
+license_data=$(curl -s "$LICENSE_URL")
+if [ $? -ne 0 ] || [ -z "$license_data" ]; then
+    log "Error: Failed to connect to license server. Exiting."
+    exit 1
+fi
+
+# 4. Check License Status from Remote
+license_entry=$(echo "$license_data" | grep -w "$SERVER_IP")
+
+if [ -z "$license_entry" ]; then
+    # IP not found in remote list (Revoked)
+    if [ ! -f "$EXPIRED_LOCK_FILE" ]; then
+        log "License for IP ${SERVER_IP} has been REVOKED."
+        systemctl stop zivpn.service
+        touch "$EXPIRED_LOCK_FILE"
+        local MSG="Notifikasi Otomatis: Lisensi untuk Klien \`${CLIENT_NAME}\` dengan IP \`${SERVER_IP}\` telah dicabut (REVOKED). Layanan zivpn telah dihentikan."
+        send_telegram_message "$MSG"
+    fi
+    exit 0
+fi
+
+# 5. IP Found, Check for Expiry or Renewal
+client_name_remote=$(echo "$license_entry" | awk '{print $1}')
+expiry_date_remote=$(echo "$license_entry" | awk '{print $2}')
+expiry_timestamp_remote=$(date -d "$expiry_date_remote" +%s)
+current_timestamp=$(date +%s)
+
+# Update local license info file with the latest from server
+if [ "$expiry_date_remote" != "$EXPIRY_DATE" ]; then
+    log "Remote license has a different expiry date (${expiry_date_remote}). Updating local file."
+    echo "CLIENT_NAME=${client_name_remote}" > "$LICENSE_INFO_FILE"
+    echo "EXPIRY_DATE=${expiry_date_remote}" >> "$LICENSE_INFO_FILE"
+    CLIENT_NAME=$client_name_remote
+    EXPIRY_DATE=$expiry_date_remote
+fi
+
+if [ "$expiry_timestamp_remote" -le "$current_timestamp" ]; then
+    # License is EXPIRED
+    if [ ! -f "$EXPIRED_LOCK_FILE" ]; then
+        log "License for IP ${SERVER_IP} has EXPIRED."
+        systemctl stop zivpn.service
+        touch "$EXPIRED_LOCK_FILE"
+        local host
+        host=$(get_host)
+        local isp
+        isp=$(get_isp)
+        log "Sending rich expiry notification via helper script..."
+        /usr/local/bin/zivpn_helper.sh expiry-notification "$host" "$SERVER_IP" "$CLIENT_NAME" "$isp" "$EXPIRY_DATE"
+    fi
+else
+    # License is ACTIVE (potentially renewed)
+    if [ -f "$EXPIRED_LOCK_FILE" ]; then
+        log "License for IP ${SERVER_IP} has been RENEWED/ACTIVATED."
+        rm "$EXPIRED_LOCK_FILE"
+        systemctl start zivpn.service
+        local host
+        host=$(get_host)
+        local isp
+        isp=$(get_isp)
+        log "Sending rich renewed notification via helper script..."
+        /usr/local/bin/zivpn_helper.sh renewed-notification "$host" "$SERVER_IP" "$CLIENT_NAME" "$isp" "$expiry_timestamp_remote"
+    else
+        log "License is active and valid. No action needed."
+    fi
+fi
+
+log "License check finished."
+exit 0
+EOF
+    chmod +x /etc/zivpn/license_checker.sh
+
+    CRON_JOB_LICENSE="*/5 * * * * /etc/zivpn/license_checker.sh # zivpn-license-check"
+    (crontab -l 2>/dev/null | grep -v "# zivpn-license-check") | crontab -
+    (crontab -l 2>/dev/null; echo "$CRON_JOB_LICENSE") | crontab -
+
+    # --- Telegram Notification Setup ---
+    if [ ! -f "/etc/zivpn/telegram.conf" ]; then
+        echo ""
+        read -p "Apakah Anda ingin mengatur notifikasi Telegram untuk status lisensi? (y/n): " confirm
+        if [[ "$confirm" == [yY] || "$confirm" == [yY][eE][sS] ]]; then
+            /usr/local/bin/zivpn_helper.sh setup-telegram
+        else
+            echo "Anda dapat mengaturnya nanti melalui menu Backup/Restore."
+        fi
+    fi
+
+    restart_zivpn
+
+    # --- API Setup ---
+    echo "--- Setting up REST API Service ---"
+    
+    # 1. Install Node.js v18
+    if ! command -v node &> /dev/null; then
+        echo "Node.js not found. Installing Node.js v18..."
+        curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+        sudo apt-get install -y nodejs
+    else
+        echo "Node.js is already installed."
+    fi
+    
+    # 2. Create API directory and files
+    mkdir -p /etc/zivpn/api
+    
+    cat <<'EOF' > /etc/zivpn/api/package.json
+{
+  "name": "zivpn-api",
+  "version": "1.0.0",
+  "description": "API for managing ZIVPN",
+  "main": "api.js",
+  "scripts": { "start": "node api.js" },
+  "dependencies": { "express": "^4.17.1" }
+}
+EOF
+
+    cat <<'EOF' > /etc/zivpn/api/api.js
+const express = require('express');
+const { execFile } = require('child_process');
+const fs = require('fs');
+const app = express();
+const PORT = 5888;
+const AUTH_KEY_PATH = '/etc/zivpn/api_auth.key';
+const ZIVPN_MANAGER_SCRIPT = '/usr/local/bin/zivpn-manager';
+
+const authenticate = (req, res, next) => {
+    const providedAuthKey = req.query.auth;
+    if (!providedAuthKey) return res.status(401).json({ status: 'error', message: 'Authentication key is required.' });
+
+    fs.readFile(AUTH_KEY_PATH, 'utf8', (err, storedKey) => {
+        if (err) return res.status(500).json({ status: 'error', message: 'Could not read authentication key.' });
+        if (providedAuthKey.trim() !== storedKey.trim()) return res.status(403).json({ status: 'error', message: 'Invalid authentication key.' });
+        next();
+    });
+};
+app.use(authenticate);
+
+const executeZivpnManager = (command, args, res) => {
+    execFile('sudo', [ZIVPN_MANAGER_SCRIPT, command, ...args], (error, stdout, stderr) => {
+        if (error) {
+            const errorMessage = stderr.includes('Error:') ? stderr : 'An internal server error occurred.';
+            return res.status(500).json({ status: 'error', message: errorMessage.trim() });
+        }
+        if (stdout.toLowerCase().includes('success')) {
+            res.json({ status: 'success', message: stdout.trim() });
+        } else {
+            res.status(400).json({ status: 'error', message: stdout.trim() });
+        }
+    });
+};
+
+app.all('/create/zivpn', (req, res) => {
+    const { password, exp } = req.query;
+    if (!password || !exp) return res.status(400).json({ status: 'error', message: 'Parameters password and exp are required.' });
+    executeZivpnManager('create_account', [password, exp], res);
+});
+app.all('/delete/zivpn', (req, res) => {
+    const { password } = req.query;
+    if (!password) return res.status(400).json({ status: 'error', message: 'Parameter password is required.' });
+    executeZivpnManager('delete_account', [password], res);
+});
+app.all('/renew/zivpn', (req, res) => {
+    const { password, exp } = req.query;
+    if (!password || !exp) return res.status(400).json({ status: 'error', message: 'Parameters password and exp are required.' });
+    executeZivpnManager('renew_account', [password, exp], res);
+});
+app.all('/trial/zivpn', (req, res) => {
+    const { exp } = req.query;
+    if (!exp) return res.status(400).json({ status: 'error', message: 'Parameter exp is required.' });
+    executeZivpnManager('trial_account', [exp], res);
+});
+
+app.listen(PORT, () => console.log('ZIVPN API server running on port ' + PORT));
+EOF
+
+    # 3. Install npm dependencies
+    echo "Installing API dependencies..."
+    npm install --prefix /etc/zivpn/api
+    
+    # 4. Create and enable systemd service
+    cat <<'EOF' > /etc/systemd/system/zivpn-api.service
+[Unit]
+Description=ZIVPN REST API Service
+After=network.target
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/zivpn/api
+ExecStart=/usr/bin/node /etc/zivpn/api/api.js
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    systemctl daemon-reload
+    systemctl enable zivpn-api.service
+    systemctl start zivpn-api.service
+    
+    # 5. Generate initial API key
+    echo "Generating initial API key..."
+    local initial_api_key
+    initial_api_key=$(LC_ALL=C tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 6)
+    echo "$initial_api_key" > /etc/zivpn/api_auth.key
+    chmod 600 /etc/zivpn/api_auth.key
+    
+    # 6. Open firewall port
+    echo "Opening firewall port 5888 for API..."
+    iptables -I INPUT -p tcp --dport 5888 -j ACCEPT
+    
+    echo "--- API Setup Complete ---"
+
+
+    # --- System Integration ---
+    echo "--- Integrating management script into the system ---"
+    cp "$0" /usr/local/bin/zivpn-manager
+    chmod +x /usr/local/bin/zivpn-manager
+
+    PROFILE_FILE="/root/.bashrc"
+    if [ -f "/root/.bash_profile" ]; then PROFILE_FILE="/root/.bash_profile"; fi
+    
+    ALIAS_CMD="alias menu='/usr/local/bin/zivpn-manager'"
+    AUTORUN_CMD="/usr/local/bin/zivpn-manager"
+
+    grep -qF "$ALIAS_CMD" "$PROFILE_FILE" || echo "$ALIAS_CMD" >> "$PROFILE_FILE"
+    grep -qF "$AUTORUN_CMD" "$PROFILE_FILE" || echo "$AUTORUN_CMD" >> "$PROFILE_FILE"
+
+    echo "The 'menu' command is now available."
+    echo "The management menu will now open automatically on login."
+    
+    echo "-----------------------------------------------------"
+    echo "Advanced management setup complete."
+    echo "Password for temporary account (expires 24h): ${RANDOM_PASS}"
+    echo "-----------------------------------------------------"
+    read -p "Press Enter to continue to the management menu..."
+}
+
+# --- Main Script ---
+function main() {
+    # Non-interactive mode for API calls
+    if [ "$#" -gt 0 ]; then
+        local command="$1"
+        shift
+        case "$command" in
+            create_account)
+                _create_account_logic "$@"
+                ;;
+            delete_account)
+                _delete_account_logic "$@"
+                ;;
+            renew_account)
+                _renew_account_logic "$@"
+                ;;
+            trial_account)
+                _create_trial_account_logic "$@"
+                ;;
+            *)
+                echo "Error: Unknown command '$command'"
+                exit 1
+                ;;
+        esac
+        exit $?
+    fi
+
+    if [ ! -f "/etc/systemd/system/zivpn.service" ]; then
+        run_setup
+    fi
+
+    while true; do
+        show_menu
+    done
+}
+
+# Execute main function only when script is run directly, not sourced
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
